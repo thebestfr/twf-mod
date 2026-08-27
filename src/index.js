@@ -19,19 +19,61 @@ function botOwner(interaction) { return interaction.user.id === process.env.BOT_
 function audit(interaction, action, target = "", details = "") { addAudit({ action, target: String(target), details: String(details), issuedBy: staff(interaction), issuedById: interaction.user.id }); }
 function durationText(seconds) { if (!seconds) return "Permanent"; if (seconds % 86400 === 0) return `${seconds / 86400} day(s)`; if (seconds % 3600 === 0) return `${seconds / 3600} hour(s)`; return `${Math.ceil(seconds / 60)} minute(s)`; }
 function parseDuration(text) { const match = String(text).trim().match(/^(\d{1,3})\s*([mhdw])$/i); return match ? Number(match[1]) * ({ m: 60, h: 3600, d: 86400, w: 604800 })[match[2].toLowerCase()] : null; }
-async function robloxProfile(userId) { const response = await fetch(`https://users.roblox.com/v1/users/${userId}`); if (!response.ok) return null; const profile = await response.json(); const thumbnail = await fetch(`https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${userId}&size=150x150&format=Png&isCircular=false`); const avatar = thumbnail.ok ? (await thumbnail.json()).data?.[0]?.imageUrl : null; return { profile, avatar }; }
+async function fetchJson(url) { try { const response = await fetch(url); return response.ok ? response.json() : null; } catch { return null; } }
+async function robloxProfile(userId) {
+  const profile = await fetchJson(`https://users.roblox.com/v1/users/${userId}`);
+  if (!profile) return null;
+  const [thumbnail, friends, followers, following, groups] = await Promise.all([
+    fetchJson(`https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${userId}&size=150x150&format=Png&isCircular=false`),
+    fetchJson(`https://friends.roblox.com/v1/users/${userId}/friends/count`),
+    fetchJson(`https://friends.roblox.com/v1/users/${userId}/followers/count`),
+    fetchJson(`https://friends.roblox.com/v1/users/${userId}/followings/count`),
+    fetchJson(`https://groups.roblox.com/v2/users/${userId}/groups/roles`),
+  ]);
+  const primaryGroup = Array.isArray(groups?.data) ? groups.data[0] : null;
+  return {
+    profile,
+    avatar: thumbnail?.data?.[0]?.imageUrl || null,
+    social: { friends: Number(friends?.count) || 0, followers: Number(followers?.count) || 0, following: Number(following?.count) || 0 },
+    primaryGroup: primaryGroup ? { name: primaryGroup.group?.name || "Unknown", id: primaryGroup.group?.id, role: primaryGroup.role?.name || "Member" } : null,
+  };
+}
 
 function modCard(userId, data) {
-  const profile = data?.profile, name = profile?.name || "Unknown Roblox User", display = profile?.displayName || name, created = profile?.created ? new Date(profile.created) : null, age = created ? Math.floor((Date.now() - created.getTime()) / 86400000) : null, ban = moderationStatus(userId), history = getHistory(userId), latest = history[0];
-  const status = ban ? (ban.expiresAt ? `Temp banned until <t:${Math.floor(ban.expiresAt / 1000)}:R> 🔴` : "Permanently banned 🔴") : "Not banned 🟢";
-  const embed = new EmbedBuilder().setColor(ban ? 0xed4245 : 0x71d7ce).setAuthor({ name: "TWF Mod • The Witches Fate" }).setTitle(display).setDescription(`**@${name}** • Roblox ID: \`${userId}\`\n${trim(profile?.description)}`).addFields({ name: "TWF Status", value: status, inline: true }, { name: "Roblox", value: `[Profile](https://www.roblox.com/users/${userId}/profile) • [Inventory](https://www.roblox.com/users/${userId}/inventory)`, inline: true }, { name: "Account", value: created ? `Created <t:${Math.floor(created.getTime() / 1000)}:D>\n${age.toLocaleString()} days old` : "Unavailable", inline: true }, { name: "Moderation reason", value: ban?.reason || "None", inline: false }, { name: "Staff history", value: latest ? `${history.length} action(s) • Latest: ${latest.action} by ${latest.issuedBy}` : "No staff actions recorded.", inline: false }).setFooter({ text: "TWF Mod • Game actions apply within a few seconds" }).setTimestamp();
+  const profile = data?.profile, name = profile?.name || "Unknown Roblox User", display = profile?.displayName || name, created = profile?.created ? new Date(profile.created) : null, age = created ? Math.floor((Date.now() - created.getTime()) / 86400000) : null, ban = moderationStatus(userId), history = getHistory(userId), latest = history[0], social = data?.social || {}, group = data?.primaryGroup;
+  const moderation = ban ? (ban.expiresAt ? `🔴 Temp banned • ends <t:${Math.floor(ban.expiresAt / 1000)}:R>` : "🔴 Permanently banned") : "🟢 No active TWF ban";
+  const accountStatus = profile?.isBanned ? "🔴 Roblox account banned" : "🟢 Roblox account active";
+  const groupText = group ? `[${group.name}](https://www.roblox.com/groups/${group.id})\nRole: **${group.role}**` : "No public primary group";
+  const latestText = latest ? `**${latest.action}**\n<t:${Math.floor(latest.at / 1000)}:R> by ${latest.issuedBy}` : "No staff actions recorded.";
+  const embed = new EmbedBuilder()
+    .setColor(ban ? 0xed4245 : 0x71d7ce)
+    .setAuthor({ name: "TWF MODERATION CENTRE • LIVE PROFILE" })
+    .setTitle(display)
+    .setDescription(`**@${name}**  •  Roblox ID: \`${userId}\`\n${trim(profile?.description, 500)}`)
+    .addFields(
+      { name: "TWF enforcement", value: moderation, inline: true },
+      { name: "Roblox account", value: accountStatus, inline: true },
+      { name: "Account age", value: created ? `<t:${Math.floor(created.getTime() / 1000)}:D>\n${age.toLocaleString()} days old` : "Unavailable", inline: true },
+      { name: "Social", value: `**${social.friends || 0}** friends • **${social.followers || 0}** followers\n**${social.following || 0}** following`, inline: true },
+      { name: "Primary group", value: groupText, inline: true },
+      { name: "Quick links", value: `[Roblox Profile](https://www.roblox.com/users/${userId}/profile) • [Inventory](https://www.roblox.com/users/${userId}/inventory)`, inline: true },
+      { name: "Moderation reason", value: ban?.reason || "No active restriction.", inline: false },
+      { name: `Staff record • ${history.length} action(s)`, value: latestText, inline: false },
+    )
+    .setFooter({ text: "TWF Mod • All game actions are logged, confirmed, and applied live" })
+    .setTimestamp();
   if (data?.avatar) embed.setThumbnail(data.avatar);
-  return { embeds: [embed], components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`twf:ban:${userId}`).setLabel("Ban").setStyle(ButtonStyle.Danger), new ButtonBuilder().setCustomId(`twf:tempban:${userId}`).setLabel("Temp Ban").setStyle(ButtonStyle.Secondary), new ButtonBuilder().setCustomId(`twf:unban:${userId}`).setLabel("Unban").setStyle(ButtonStyle.Success), new ButtonBuilder().setCustomId(`twf:history:${userId}`).setLabel("History").setStyle(ButtonStyle.Secondary)), new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`twf:gift:${userId}`).setLabel("Gift Character").setStyle(ButtonStyle.Success), new ButtonBuilder().setCustomId(`twf:revoke:${userId}`).setLabel("Revoke Character").setStyle(ButtonStyle.Danger), new ButtonBuilder().setCustomId(`twf:gifts:${userId}`).setLabel("Character History").setStyle(ButtonStyle.Secondary), new ButtonBuilder().setCustomId(`twf:refresh:${userId}`).setLabel("Refresh").setStyle(ButtonStyle.Secondary), new ButtonBuilder().setLabel("Roblox Profile").setStyle(ButtonStyle.Link).setURL(`https://www.roblox.com/users/${userId}/profile`))] };
+  return { embeds: [embed], components: [
+    new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`twf:ban:${userId}`).setLabel("Ban").setStyle(ButtonStyle.Danger), new ButtonBuilder().setCustomId(`twf:tempban:${userId}`).setLabel("Temp Ban").setStyle(ButtonStyle.Secondary), new ButtonBuilder().setCustomId(`twf:unban:${userId}`).setLabel("Unban").setStyle(ButtonStyle.Success), new ButtonBuilder().setCustomId(`twf:history:${userId}`).setLabel("Full History").setStyle(ButtonStyle.Secondary)),
+    new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`twf:gift:${userId}`).setLabel("Gift Character").setStyle(ButtonStyle.Success), new ButtonBuilder().setCustomId(`twf:revoke:${userId}`).setLabel("Revoke Character").setStyle(ButtonStyle.Danger), new ButtonBuilder().setCustomId(`twf:gifts:${userId}`).setLabel("Character Record").setStyle(ButtonStyle.Secondary), new ButtonBuilder().setCustomId(`twf:refresh:${userId}`).setLabel("Refresh Profile").setStyle(ButtonStyle.Secondary)),
+    new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`twf:coins_add:${userId}`).setLabel("Add Coins").setStyle(ButtonStyle.Success), new ButtonBuilder().setCustomId(`twf:coins_remove:${userId}`).setLabel("Remove Coins").setStyle(ButtonStyle.Danger), new ButtonBuilder().setCustomId(`twf:coins_set:${userId}`).setLabel("Set Coins").setStyle(ButtonStyle.Secondary), new ButtonBuilder().setLabel("Open Roblox").setStyle(ButtonStyle.Link).setURL(`https://www.roblox.com/users/${userId}/profile`)),
+  ] };
 }
 
 function modal(action, userId) {
-  const titles = { grant: "Gift TWF Character", revoke: "Revoke TWF Character", ban: "Permanently Ban Roblox User", tempban: "Temp Ban Roblox User" }, form = new ModalBuilder().setCustomId(`twf:submit:${action}:${userId}`).setTitle(titles[action]);
+  const titles = { grant: "Gift TWF Character", revoke: "Revoke TWF Character", ban: "Permanently Ban Roblox User", tempban: "Temp Ban Roblox User", coins_add: "Add TWF Coins", coins_remove: "Remove TWF Coins", coins_set: "Set TWF Coin Balance" }, form = new ModalBuilder().setCustomId(`twf:submit:${action}:${userId}`).setTitle(titles[action]);
   if (["grant", "revoke"].includes(action)) form.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("character").setLabel("TWF character name").setPlaceholder("Example: Sabrina Morningstar").setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(80)));
+  else if (["coins_add", "coins_remove", "coins_set"].includes(action)) form.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("amount").setLabel("Coin amount").setPlaceholder("Example: 15000").setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(9)), new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("reason").setLabel("Staff note").setPlaceholder("Optional note for the audit log").setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(200)));
   else { form.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("reason").setLabel("Reason").setPlaceholder("Explain why this action is needed").setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(500))); if (action === "tempban") form.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("duration").setLabel("Length — use 30m, 1h, 7d, or 1w").setPlaceholder("Example: 1d").setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(5))); }
   return form;
 }
@@ -76,7 +118,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (action === "history") return interaction.reply({ embeds: [historyCard(userId)], ephemeral: true });
     if (action === "gifts") return interaction.reply({ embeds: [historyCard(userId, true)], ephemeral: true });
     if (action === "refresh") { await interaction.deferUpdate(); let data = null; try { data = await robloxProfile(userId); } catch {} return interaction.editReply(modCard(userId, data)); }
-    if (["gift", "revoke", "ban", "tempban"].includes(action)) return interaction.showModal(modal(action === "gift" ? "grant" : action === "revoke" ? "revoke" : action, userId));
+    if (["gift", "revoke", "ban", "tempban", "coins_add", "coins_remove", "coins_set"].includes(action)) return interaction.showModal(modal(action === "gift" ? "grant" : action === "revoke" ? "revoke" : action, userId));
     if (action === "unban") { moderate("unban", userId, "Unbanned by TWF staff", 0, staff(interaction)); audit(interaction, "unban", userId, "Unbanned from TWF"); return interaction.reply({ content: `Roblox user **${userId}** has been unbanned in TWF.`, ephemeral: true }); }
     return;
   }
@@ -84,6 +126,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (!authorized(interaction)) return interaction.reply({ content: "You do not have permission to use TWF Mod.", ephemeral: true });
     const [, , action, userId] = interaction.customId.split(":");
     if (["grant", "revoke"].includes(action)) { const pending = beginCharacterAction(action, userId, interaction.fields.getTextInputValue("character").trim(), staff(interaction)); return interaction.reply({ ...(pending.error ? { content: pending.error } : pending), ephemeral: true }); }
+    if (["coins_add", "coins_remove", "coins_set"].includes(action)) {
+      const amount = Number(interaction.fields.getTextInputValue("amount").trim()), reason = interaction.fields.getTextInputValue("reason").trim();
+      const pending = beginCoinAction(action, userId, amount, reason, staff(interaction));
+      return interaction.reply({ ...(pending.error ? { content: pending.error } : pending), ephemeral: true });
+    }
     const reason = interaction.fields.getTextInputValue("reason").trim(), seconds = action === "tempban" ? parseDuration(interaction.fields.getTextInputValue("duration")) : 0;
     if (action === "tempban" && !seconds) return interaction.reply({ content: "Use a length like `30m`, `1h`, `7d`, or `1w`.", ephemeral: true });
     const result = moderate(action, userId, reason, seconds, staff(interaction)); if (!result.error) audit(interaction, action, userId, reason); return interaction.reply({ content: result.error || `${action === "ban" ? "Banned" : "Temp banned"} Roblox user **${userId}**${seconds ? ` for **${durationText(seconds)}**` : ""}.`, ephemeral: true });
