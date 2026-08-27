@@ -12,7 +12,31 @@ export function enqueue({ action, userId = "0", character = "", reason = "", dur
   const command = { id: crypto.randomUUID(), action, userId: String(userId), character: String(character).trim(), reason: String(reason).trim(), durationSeconds: Number(durationSeconds) || 0, amount: Number(amount) || 0, code: String(code).trim(), maxUses: Number(maxUses) || 0, expiresMinutes: Number(expiresMinutes) || 0, issuedBy: String(issuedBy), createdAt: Date.now(), expiresAt: Date.now() + 10 * 60 * 1000 };
   commands.push(command); write("commands.json", commands.filter((entry) => entry.expiresAt > Date.now())); return command;
 }
-export function activeCommands() { const commands = read("commands.json", []).filter((entry) => entry.expiresAt > Date.now()); write("commands.json", commands); return commands; }
+function currentCommands() { return read("commands.json", []).filter((entry) => entry.expiresAt > Date.now()); }
+export function activeCommands() {
+  const commands = currentCommands();
+  write("commands.json", commands);
+  return commands.filter((entry) => !entry.claimedUntil || entry.claimedUntil <= Date.now());
+}
+// A command is leased to one Roblox server before it is applied. This prevents
+// every active server from applying the same gift, coin change, or ban.
+export function claimCommand(id, claimId) {
+  const commands = currentCommands(), command = commands.find((entry) => entry.id === String(id));
+  if (!command || !claimId || (command.claimedUntil > Date.now() && command.claimedBy !== String(claimId))) { write("commands.json", commands); return null; }
+  command.claimedBy = String(claimId);
+  command.claimedUntil = Date.now() + 30000;
+  write("commands.json", commands);
+  return command;
+}
+// Only the server that claimed a command may remove it once the game confirms
+// the DataStore update succeeded.
+export function acknowledgeCommand(id, claimId) {
+  const commands = currentCommands(), index = commands.findIndex((entry) => entry.id === String(id));
+  if (index < 0 || commands[index].claimedBy !== String(claimId)) { write("commands.json", commands); return false; }
+  commands.splice(index, 1);
+  write("commands.json", commands);
+  return true;
+}
 export function moderationStatus(userId) { const all = read("moderation.json", {}); const record = all[String(userId)]; if (record?.expiresAt && record.expiresAt <= Date.now()) { delete all[String(userId)]; write("moderation.json", all); return null; } return record || null; }
 export function setModeration(userId, record) { const all = read("moderation.json", {}); if (record) all[String(userId)] = record; else delete all[String(userId)]; write("moderation.json", all); }
 export function addHistory(userId, entry) { const all = read("history.json", {}); const key = String(userId); const records = Array.isArray(all[key]) ? all[key] : []; records.unshift({ id: crypto.randomUUID(), at: Date.now(), ...entry }); all[key] = records.slice(0, 25); write("history.json", all); }

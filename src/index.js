@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import express from "express";
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, Client, EmbedBuilder, Events, GatewayIntentBits, ModalBuilder, TextInputBuilder, TextInputStyle } from "discord.js";
 import { TWF_CHARACTERS } from "./characters.js";
-import { activeCommands, addAllowedRole, addAudit, addHistory, enqueue, getAllowedRoles, getAudit, getHistory, moderationStatus, removeAllowedRole, setModeration } from "./store.js";
+import { acknowledgeCommand, activeCommands, addAllowedRole, addAudit, addHistory, claimCommand, enqueue, getAllowedRoles, getAudit, getHistory, moderationStatus, removeAllowedRole, setModeration } from "./store.js";
 
 for (const name of ["DISCORD_TOKEN", "BRIDGE_SECRET"]) if (!process.env[name]) throw new Error(`Missing ${name} in .env.`);
 const defaultRoleIds = (process.env.ALLOWED_ROLE_IDS || "").split(",").map((id) => id.trim()).filter(Boolean);
@@ -53,6 +53,18 @@ function completedAction(record) { if (record.type === "character") { const resu
 
 app.get("/health", (_request, response) => response.json({ ok: true }));
 app.get("/api/roblox/character-commands", (request, response) => { if (request.get("x-bridge-secret") !== process.env.BRIDGE_SECRET) return response.status(401).json({ error: "Unauthorized" }); response.set("Cache-Control", "no-store"); response.json({ commands: activeCommands() }); });
+app.post("/api/roblox/character-commands/:id/claim", (request, response) => {
+  if (request.get("x-bridge-secret") !== process.env.BRIDGE_SECRET) return response.status(401).json({ error: "Unauthorized" });
+  const command = claimCommand(request.params.id, request.get("x-bridge-claim"));
+  if (!command) return response.status(409).json({ ok: false });
+  response.set("Cache-Control", "no-store");
+  return response.json({ ok: true, command });
+});
+app.post("/api/roblox/character-commands/:id/ack", (request, response) => {
+  if (request.get("x-bridge-secret") !== process.env.BRIDGE_SECRET) return response.status(401).json({ error: "Unauthorized" });
+  if (!acknowledgeCommand(request.params.id, request.get("x-bridge-claim"))) return response.status(409).json({ ok: false });
+  return response.json({ ok: true });
+});
 client.once(Events.ClientReady, (ready) => console.log(`TWF Mod ready as ${ready.user.tag}`));
 client.on(Events.InteractionCreate, async (interaction) => {
   if (interaction.isAutocomplete()) { if (interaction.commandName !== "twf" || !authorized(interaction)) return interaction.respond([]); const focused = interaction.options.getFocused().toLowerCase(); return interaction.respond(TWF_CHARACTERS.filter((character) => character.toLowerCase().includes(focused)).slice(0, 25).map((character) => ({ name: character, value: character }))); }
