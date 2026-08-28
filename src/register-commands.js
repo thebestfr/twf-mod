@@ -4,6 +4,11 @@ import { REST, Routes, SlashCommandBuilder } from "discord.js";
 const robloxId = (option) => option.setName("roblox_user_id").setDescription("Roblox numeric user ID").setRequired(true);
 const amount = (option, description, minimum = 1) => option.setName("amount").setDescription(description).setMinValue(minimum).setMaxValue(100000000).setRequired(true);
 const reason = (option) => option.setName("reason").setDescription("Staff note (optional)").setMaxLength(200);
+const permission = (option) => option.setName("command").setDescription("TWF Mod area to grant or remove").setRequired(true).addChoices(
+  { name: "🛡️ Mod panel + bans", value: "mod" }, { name: "🎭 Character gifts + revokes", value: "characters" },
+  { name: "🪙 Coin controls", value: "coins" }, { name: "🎟️ Coin-code controls", value: "codes" },
+  { name: "📜 Audit log", value: "audit" }, { name: "👑 Everything", value: "all" },
+);
 
 const commands = [
   new SlashCommandBuilder().setName("twf").setDescription("The Witches Fate staff controls.")
@@ -18,6 +23,12 @@ const commands = [
     .addSubcommand((sub) => sub.setName("roles-list").setDescription("Show the Discord roles allowed to use TWF Mod."))
     .addSubcommand((sub) => sub.setName("roles-add").setDescription("Allow a Discord role to use TWF Mod.").addRoleOption((option) => option.setName("role").setDescription("Staff role to allow").setRequired(true)))
     .addSubcommand((sub) => sub.setName("roles-remove").setDescription("Remove a Discord role's TWF Mod access.").addRoleOption((option) => option.setName("role").setDescription("Staff role to remove").setRequired(true)))
+    .addSubcommand((sub) => sub.setName("permissions-list").setDescription("Show the detailed TWF Mod permission setup."))
+    .addSubcommand((sub) => sub.setName("permissions-role").setDescription("Grant or remove one TWF Mod permission for a Discord role.").addRoleOption((option) => option.setName("role").setDescription("Role to update").setRequired(true)).addStringOption(permission).addBooleanOption((option) => option.setName("enabled").setDescription("True = grant, false = remove").setRequired(true)))
+    .addSubcommand((sub) => sub.setName("permissions-user").setDescription("Grant or remove one TWF Mod permission for a Discord user.").addUserOption((option) => option.setName("user").setDescription("Discord user to update").setRequired(true)).addStringOption(permission).addBooleanOption((option) => option.setName("enabled").setDescription("True = grant, false = remove").setRequired(true)))
+    .addSubcommand((sub) => sub.setName("character-list").setDescription("Browse every character available through TWF Mod gifts."))
+    .addSubcommand((sub) => sub.setName("status").setDescription("View TWF Mod system status and your access areas."))
+    .addSubcommand((sub) => sub.setName("help").setDescription("Open the TWF Mod staff-command guide."))
     .addSubcommand((sub) => sub.setName("audit").setDescription("View the latest TWF Mod audit actions."))
     .addSubcommand((sub) => sub.setName("ping").setDescription("Check whether TWF Mod is online.")),
 ].map((command) => command.toJSON());

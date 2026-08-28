@@ -43,6 +43,39 @@ export function addHistory(userId, entry) { const all = read("history.json", {})
 export function getHistory(userId) { const all = read("history.json", {}); return Array.isArray(all[String(userId)]) ? all[String(userId)] : []; }
 export function getAllowedRoles(defaultRoleIds = []) { const config = read("role-permissions.json", null); if (config && Array.isArray(config.roles)) return config.roles.map(String); const roles = [...new Set(defaultRoleIds.map(String).filter(Boolean))]; write("role-permissions.json", { roles }); return roles; }
 export function addAllowedRole(roleId, defaultRoleIds = []) { const roles = new Set(getAllowedRoles(defaultRoleIds)); roles.add(String(roleId)); write("role-permissions.json", { roles: [...roles] }); return [...roles]; }
-export function removeAllowedRole(roleId, defaultRoleIds = []) { const roles = new Set(getAllowedRoles(defaultRoleIds)); roles.delete(String(roleId)); write("role-permissions.json", { roles: [...roles] }); return [...roles]; }
+export function removeAllowedRole(roleId, defaultRoleIds = []) { const roles = new Set(getAllowedRoles(defaultRoleIds)); roles.delete(String(roleId)); write("role-permissions.json", { roles: [...roles] }); const permissions = read("command-permissions.json", { roles: {}, users: {} }); if (permissions.roles) delete permissions.roles[String(roleId)]; write("command-permissions.json", permissions); return [...roles]; }
+export const PERMISSION_KEYS = ["mod", "characters", "coins", "codes", "audit", "all"];
+function commandPermissions(defaultRoleIds = []) {
+  const saved = read("command-permissions.json", { roles: {}, users: {} });
+  const roles = saved.roles && typeof saved.roles === "object" ? saved.roles : {};
+  const users = saved.users && typeof saved.users === "object" ? saved.users : {};
+  // Existing allowed staff roles remain full-access until an owner changes them.
+  for (const roleId of getAllowedRoles(defaultRoleIds)) if (!Array.isArray(roles[roleId])) roles[roleId] = ["all"];
+  const config = { roles, users };
+  write("command-permissions.json", config);
+  return config;
+}
+function normalizedPermissions(values) { return [...new Set((Array.isArray(values) ? values : []).map(String).filter((value) => PERMISSION_KEYS.includes(value)))]; }
+export function canUseCommand(userId, roleIds, command, defaultRoleIds = []) {
+  const config = commandPermissions(defaultRoleIds), wanted = String(command);
+  const allowed = (values) => { const list = normalizedPermissions(values); return list.includes("all") || list.includes(wanted); };
+  if (allowed(config.users[String(userId)])) return true;
+  return (Array.isArray(roleIds) ? roleIds : []).some((roleId) => allowed(config.roles[String(roleId)]));
+}
+export function setRoleCommandPermission(roleId, command, enabled, defaultRoleIds = []) {
+  const config = commandPermissions(defaultRoleIds), id = String(roleId), values = new Set(normalizedPermissions(config.roles[id]));
+  if (enabled) values.add(command); else values.delete(command);
+  if (values.size) config.roles[id] = [...values]; else delete config.roles[id];
+  write("command-permissions.json", config);
+  return normalizedPermissions(config.roles[id]);
+}
+export function setUserCommandPermission(userId, command, enabled, defaultRoleIds = []) {
+  const config = commandPermissions(defaultRoleIds), id = String(userId), values = new Set(normalizedPermissions(config.users[id]));
+  if (enabled) values.add(command); else values.delete(command);
+  if (values.size) config.users[id] = [...values]; else delete config.users[id];
+  write("command-permissions.json", config);
+  return normalizedPermissions(config.users[id]);
+}
+export function getCommandPermissions(defaultRoleIds = []) { return commandPermissions(defaultRoleIds); }
 export function addAudit(entry) { const records = read("audit.json", []); records.unshift({ id: crypto.randomUUID(), at: Date.now(), ...entry }); write("audit.json", records.slice(0, 300)); }
 export function getAudit(limit = 25) { return read("audit.json", []).slice(0, Math.max(1, Math.min(100, Number(limit) || 25))); }

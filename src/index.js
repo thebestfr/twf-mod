@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import express from "express";
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, Client, EmbedBuilder, Events, GatewayIntentBits, ModalBuilder, TextInputBuilder, TextInputStyle } from "discord.js";
 import { TWF_CHARACTERS } from "./characters.js";
-import { acknowledgeCommand, activeCommands, addAllowedRole, addAudit, addHistory, claimCommand, enqueue, getAllowedRoles, getAudit, getHistory, moderationStatus, removeAllowedRole, setModeration } from "./store.js";
+import { acknowledgeCommand, activeCommands, addAllowedRole, addAudit, addHistory, canUseCommand, claimCommand, enqueue, getAllowedRoles, getAudit, getCommandPermissions, getHistory, moderationStatus, removeAllowedRole, setModeration, setRoleCommandPermission, setUserCommandPermission } from "./store.js";
 
 for (const name of ["DISCORD_TOKEN", "BRIDGE_SECRET"]) if (!process.env[name]) throw new Error(`Missing ${name} in .env.`);
 const defaultRoleIds = (process.env.ALLOWED_ROLE_IDS || "").split(",").map((id) => id.trim()).filter(Boolean);
@@ -14,11 +14,13 @@ const validUserId = (value) => /^\d{1,20}$/.test(String(value));
 const staff = (interaction) => `${interaction.user.username} (${interaction.user.id})`;
 const trim = (text, length = 700) => text ? text.slice(0, length) : "No public description.";
 function roleIds(interaction) { const roles = interaction.member?.roles; return roles?.cache ? roles.cache.map((role) => role.id) : Array.isArray(roles) ? roles : []; }
-function authorized(interaction) { const allowed = new Set(getAllowedRoles(defaultRoleIds)); return roleIds(interaction).some((id) => allowed.has(id)); }
 function botOwner(interaction) { return interaction.user.id === process.env.BOT_OWNER_ID || interaction.user.id === interaction.guild?.ownerId; }
+function authorized(interaction, permission = "mod") { return botOwner(interaction) || canUseCommand(interaction.user.id, roleIds(interaction), permission, defaultRoleIds); }
 function audit(interaction, action, target = "", details = "") { addAudit({ action, target: String(target), details: String(details), issuedBy: staff(interaction), issuedById: interaction.user.id }); }
 function durationText(seconds) { if (!seconds) return "Permanent"; if (seconds % 86400 === 0) return `${seconds / 86400} day(s)`; if (seconds % 3600 === 0) return `${seconds / 3600} hour(s)`; return `${Math.ceil(seconds / 60)} minute(s)`; }
 function parseDuration(text) { const match = String(text).trim().match(/^(\d{1,3})\s*([mhdw])$/i); return match ? Number(match[1]) * ({ m: 60, h: 3600, d: 86400, w: 604800 })[match[2].toLowerCase()] : null; }
+const permissionNames = { mod: "🛡️ Mod panel + bans", characters: "🎭 Characters", coins: "🪙 Coins", codes: "🎟️ Coin codes", audit: "📜 Audit log", all: "👑 Everything" };
+const permissionForSubcommand = (sub) => ({ mod: "mod", gift: "characters", revoke: "characters", "coins-add": "coins", "coins-remove": "coins", "coins-set": "coins", "code-create": "codes", "code-disable": "codes", audit: "audit", "character-list": "characters" })[sub] || "mod";
 async function fetchJson(url) { try { const response = await fetch(url); return response.ok ? response.json() : null; } catch { return null; } }
 async function robloxProfile(userId) {
   const profile = await fetchJson(`https://users.roblox.com/v1/users/${userId}`);
@@ -64,9 +66,9 @@ function modCard(userId, data) {
     .setTimestamp();
   if (data?.avatar) embed.setThumbnail(data.avatar);
   return { embeds: [embed], components: [
-    new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`twf:ban:${userId}`).setLabel("Ban").setStyle(ButtonStyle.Danger), new ButtonBuilder().setCustomId(`twf:tempban:${userId}`).setLabel("Temp Ban").setStyle(ButtonStyle.Secondary), new ButtonBuilder().setCustomId(`twf:unban:${userId}`).setLabel("Unban").setStyle(ButtonStyle.Success), new ButtonBuilder().setCustomId(`twf:history:${userId}`).setLabel("Full History").setStyle(ButtonStyle.Secondary)),
-    new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`twf:gift:${userId}`).setLabel("Gift Character").setStyle(ButtonStyle.Success), new ButtonBuilder().setCustomId(`twf:revoke:${userId}`).setLabel("Revoke Character").setStyle(ButtonStyle.Danger), new ButtonBuilder().setCustomId(`twf:gifts:${userId}`).setLabel("Character Record").setStyle(ButtonStyle.Secondary), new ButtonBuilder().setCustomId(`twf:refresh:${userId}`).setLabel("Refresh Profile").setStyle(ButtonStyle.Secondary)),
-    new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`twf:coins_add:${userId}`).setLabel("Add Coins").setStyle(ButtonStyle.Success), new ButtonBuilder().setCustomId(`twf:coins_remove:${userId}`).setLabel("Remove Coins").setStyle(ButtonStyle.Danger), new ButtonBuilder().setCustomId(`twf:coins_set:${userId}`).setLabel("Set Coins").setStyle(ButtonStyle.Secondary), new ButtonBuilder().setLabel("Open Roblox").setStyle(ButtonStyle.Link).setURL(`https://www.roblox.com/users/${userId}/profile`)),
+    new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`twf:ban:${userId}`).setLabel("🔨 Ban").setStyle(ButtonStyle.Danger), new ButtonBuilder().setCustomId(`twf:tempban:${userId}`).setLabel("⏳ Temp Ban").setStyle(ButtonStyle.Secondary), new ButtonBuilder().setCustomId(`twf:unban:${userId}`).setLabel("🔓 Unban").setStyle(ButtonStyle.Success), new ButtonBuilder().setCustomId(`twf:history:${userId}`).setLabel("📜 History").setStyle(ButtonStyle.Secondary)),
+    new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`twf:gift:${userId}`).setLabel("🎁 Gift Character").setStyle(ButtonStyle.Success), new ButtonBuilder().setCustomId(`twf:revoke:${userId}`).setLabel("🚫 Revoke").setStyle(ButtonStyle.Danger), new ButtonBuilder().setCustomId(`twf:gifts:${userId}`).setLabel("🎭 Character Record").setStyle(ButtonStyle.Secondary), new ButtonBuilder().setCustomId(`twf:refresh:${userId}`).setLabel("🔄 Refresh").setStyle(ButtonStyle.Secondary)),
+    new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`twf:coins_add:${userId}`).setLabel("🪙 Add Coins").setStyle(ButtonStyle.Success), new ButtonBuilder().setCustomId(`twf:coins_remove:${userId}`).setLabel("💸 Remove Coins").setStyle(ButtonStyle.Danger), new ButtonBuilder().setCustomId(`twf:coins_set:${userId}`).setLabel("⚖️ Set Coins").setStyle(ButtonStyle.Secondary), new ButtonBuilder().setLabel("🔗 Open Roblox").setStyle(ButtonStyle.Link).setURL(`https://www.roblox.com/users/${userId}/profile`)),
   ] };
 }
 
@@ -82,6 +84,14 @@ function moderate(action, userId, reason, durationSeconds, issuedBy) { if (!vali
 function historyCard(userId, characterOnly = false) { const entries = getHistory(userId).filter((entry) => !characterOnly || /^(Gifted|Revoked) /.test(entry.action)); const text = entries.length ? entries.map((entry) => `• <t:${Math.floor(entry.at / 1000)}:R> — **${entry.action}**\n  ${entry.reason ? `${entry.reason} • ` : ""}${entry.issuedBy}`).join("\n") : characterOnly ? "No character gifts or revokes recorded." : "No staff history recorded."; return new EmbedBuilder().setColor(0x5865f2).setTitle(`TWF ${characterOnly ? "Character" : "Mod"} History • ${userId}`).setDescription(text).setFooter({ text: "TWF Mod" }); }
 function rolesCard(guild) { const roles = getAllowedRoles(defaultRoleIds).map((id) => guild?.roles.cache.get(id) ? `<@&${id}>` : `Unknown role (\`${id}\`)`); return new EmbedBuilder().setColor(0x5865f2).setTitle("TWF Mod Staff Roles").setDescription(roles.length ? roles.map((role, index) => `${index + 1}. ${role}`).join("\n") : "No staff roles can currently use TWF Mod.").setFooter({ text: "Only the Discord server owner or BOT_OWNER_ID can change these roles." }); }
 function auditCard() { const entries = getAudit(25); const text = entries.length ? entries.map((entry) => `• <t:${Math.floor(entry.at / 1000)}:R> — **${entry.action}**\n  By ${entry.issuedBy}${entry.target ? ` • Target: ${entry.target}` : ""}${entry.details ? `\n  ${entry.details}` : ""}`).join("\n") : "No bot actions have been recorded yet."; return new EmbedBuilder().setColor(0xf1c40f).setTitle("TWF Mod Audit Log").setDescription(text).setFooter({ text: "Shows the latest 25 bot actions" }).setTimestamp(); }
+function permissionsCard(guild) {
+  const config = getCommandPermissions(defaultRoleIds);
+  const format = (entries, type) => Object.entries(entries).map(([id, permissions]) => `${type === "role" ? (guild?.roles.cache.get(id) ? `<@&${id}>` : `Role \`${id}\``) : `<@${id}>`}\n${permissions.map((item) => permissionNames[item] || item).join(" • ")}`).join("\n\n") || "None configured.";
+  return new EmbedBuilder().setColor(0x8e44ad).setTitle("⚙️ TWF Mod Permission Centre").setDescription("Owners can give a specific role or user only the actions they need. `👑 Everything` grants full access.").addFields({ name: "Role permissions", value: trim(format(config.roles, "role"), 1024), inline: false }, { name: "User overrides", value: trim(format(config.users, "user"), 1024), inline: false }).setFooter({ text: "Use /twf permissions-role or /twf permissions-user to edit access." }).setTimestamp();
+}
+function helpCard() { return new EmbedBuilder().setColor(0x5865f2).setTitle("✨ TWF Mod • Staff Guide").setDescription("A live Discord control centre for The Witches Fate. Every game-changing action is confirmed and recorded.").addFields({ name: "🛡️ Player moderation", value: "`/twf mod` • profile, ban, temp-ban, unban, history", inline: false }, { name: "🎭 Character access", value: "`/twf gift` • `/twf revoke` • `/twf character-list`", inline: false }, { name: "🪙 Economy", value: "`/twf coins-add` • `/twf coins-remove` • `/twf coins-set` • coin-code commands", inline: false }, { name: "⚙️ Staff setup", value: "`/twf permissions-list` • `/twf permissions-role` • `/twf permissions-user` • `/twf audit`", inline: false }).setFooter({ text: "TWF Mod • actions apply in game within seconds" }).setTimestamp(); }
+function statusCard(interaction) { const available = Object.keys(permissionNames).filter((key) => key !== "all" && authorized(interaction, key)).map((key) => permissionNames[key]); return new EmbedBuilder().setColor(0x57f287).setTitle("🟢 TWF Mod System Status").setDescription("Discord bot is online and connected to the TWF command bridge.").addFields({ name: "Your access", value: botOwner(interaction) ? "👑 Server owner / bot owner — full access" : available.length ? available.join("\n") : "No TWF Mod permissions", inline: false }, { name: "Safety", value: "✅ Confirmations • ✅ Audit logging • ✅ One-time live game actions", inline: false }).setTimestamp(); }
+function charactersCard() { return new EmbedBuilder().setColor(0xff4da6).setTitle(`🎭 TWF Character Gift Directory • ${TWF_CHARACTERS.length}`).setDescription(TWF_CHARACTERS.map((name) => `• ${name}`).join("\n")).setFooter({ text: "Use /twf gift with a Roblox ID and character name. Scarlet Sheila is custom-only." }).setTimestamp(); }
 
 function confirmCard(record, title, description, fields, danger = false) {
   const token = crypto.randomBytes(12).toString("hex"); record.expiresAt = Date.now() + 300000; pendingActions.set(token, record);
@@ -109,11 +119,12 @@ app.post("/api/roblox/character-commands/:id/ack", (request, response) => {
 });
 client.once(Events.ClientReady, (ready) => console.log(`TWF Mod ready as ${ready.user.tag}`));
 client.on(Events.InteractionCreate, async (interaction) => {
-  if (interaction.isAutocomplete()) { if (interaction.commandName !== "twf" || !authorized(interaction)) return interaction.respond([]); const focused = interaction.options.getFocused().toLowerCase(); return interaction.respond(TWF_CHARACTERS.filter((character) => character.toLowerCase().includes(focused)).slice(0, 25).map((character) => ({ name: character, value: character }))); }
+  if (interaction.isAutocomplete()) { if (interaction.commandName !== "twf" || !authorized(interaction, "characters")) return interaction.respond([]); const focused = interaction.options.getFocused().toLowerCase(); return interaction.respond(TWF_CHARACTERS.filter((character) => character.toLowerCase().includes(focused)).slice(0, 25).map((character) => ({ name: character, value: character }))); }
   if (interaction.isButton()) {
-    if (!authorized(interaction)) return interaction.reply({ content: "You do not have permission to use TWF Mod.", ephemeral: true });
     const [, action, value] = interaction.customId.split(":");
-    if (["confirm", "cancel"].includes(action)) { const record = pendingActions.get(value); if (!record || record.expiresAt <= Date.now()) return interaction.update({ content: "This staff action expired. Please start it again.", embeds: [], components: [] }); if (record.issuedBy !== staff(interaction)) return interaction.reply({ content: "Only the staff member who started this action can confirm it.", ephemeral: true }); pendingActions.delete(value); if (action === "cancel") { audit(interaction, "Cancelled pending action", record.userId || record.code, record.action); return interaction.update({ content: "Staff action cancelled.", embeds: [], components: [] }); } audit(interaction, record.action, record.userId || record.code, record.character || record.code || (record.amount ? `${record.amount} coins` : "")); return interaction.update(completedAction(record)); }
+    if (["confirm", "cancel"].includes(action)) { const record = pendingActions.get(value), permission = record?.type === "character" ? "characters" : record?.type === "coins" ? "coins" : record?.type === "code" ? "codes" : "mod"; if (!authorized(interaction, permission)) return interaction.reply({ content: "You do not have permission for this TWF Mod action.", ephemeral: true }); if (!record || record.expiresAt <= Date.now()) return interaction.update({ content: "This staff action expired. Please start it again.", embeds: [], components: [] }); if (record.issuedBy !== staff(interaction)) return interaction.reply({ content: "Only the staff member who started this action can confirm it.", ephemeral: true }); pendingActions.delete(value); if (action === "cancel") { audit(interaction, "Cancelled pending action", record.userId || record.code, record.action); return interaction.update({ content: "Staff action cancelled.", embeds: [], components: [] }); } audit(interaction, record.action, record.userId || record.code, record.character || record.code || (record.amount ? `${record.amount} coins` : "")); return interaction.update(completedAction(record)); }
+    const buttonPermission = (["gift", "revoke", "gifts"].includes(action) ? "characters" : action.startsWith("coins_") ? "coins" : action === "history" ? "audit" : "mod");
+    if (!authorized(interaction, buttonPermission)) return interaction.reply({ content: "You do not have permission for this TWF Mod action.", ephemeral: true });
     const userId = value;
     if (action === "history") return interaction.reply({ embeds: [historyCard(userId)], ephemeral: true });
     if (action === "gifts") return interaction.reply({ embeds: [historyCard(userId, true)], ephemeral: true });
@@ -123,8 +134,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
   if (interaction.isModalSubmit()) {
-    if (!authorized(interaction)) return interaction.reply({ content: "You do not have permission to use TWF Mod.", ephemeral: true });
     const [, , action, userId] = interaction.customId.split(":");
+    const modalPermission = ["grant", "revoke"].includes(action) ? "characters" : action.startsWith("coins_") ? "coins" : "mod";
+    if (!authorized(interaction, modalPermission)) return interaction.reply({ content: "You do not have permission for this TWF Mod action.", ephemeral: true });
     if (["grant", "revoke"].includes(action)) { const pending = beginCharacterAction(action, userId, interaction.fields.getTextInputValue("character").trim(), staff(interaction)); return interaction.reply({ ...(pending.error ? { content: pending.error } : pending), ephemeral: true }); }
     if (["coins_add", "coins_remove", "coins_set"].includes(action)) {
       const amount = Number(interaction.fields.getTextInputValue("amount").trim()), reason = interaction.fields.getTextInputValue("reason").trim();
@@ -138,8 +150,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand() || interaction.commandName !== "twf") return;
   const sub = interaction.options.getSubcommand();
   if (sub === "ping") return interaction.reply({ content: "TWF Mod is online.", ephemeral: true });
-  if (["roles-list", "roles-add", "roles-remove"].includes(sub)) {
+  if (sub === "help") return interaction.reply({ embeds: [helpCard()], ephemeral: true });
+  if (sub === "status") return interaction.reply({ embeds: [statusCard(interaction)], ephemeral: true });
+  if (["roles-list", "roles-add", "roles-remove", "permissions-list", "permissions-role", "permissions-user"].includes(sub)) {
     if (!botOwner(interaction)) return interaction.reply({ content: "Only the Discord server owner or the BOT_OWNER_ID account can manage TWF Mod roles.", ephemeral: true });
+    if (sub === "permissions-list") return interaction.reply({ embeds: [permissionsCard(interaction.guild)], ephemeral: true });
+    if (sub === "permissions-role") { const role = interaction.options.getRole("role", true), command = interaction.options.getString("command", true), enabled = interaction.options.getBoolean("enabled", true), permissions = setRoleCommandPermission(role.id, command, enabled, defaultRoleIds); audit(interaction, enabled ? "Granted role permission" : "Removed role permission", role.id, `${role.name} • ${permissionNames[command]}`); return interaction.reply({ content: `${enabled ? "✅ Granted" : "🗑️ Removed"} **${permissionNames[command]}** ${enabled ? "for" : "from"} ${role}.\nCurrent: ${permissions.map((item) => permissionNames[item]).join(" • ") || "No access"}`, embeds: [permissionsCard(interaction.guild)], ephemeral: true }); }
+    if (sub === "permissions-user") { const user = interaction.options.getUser("user", true), command = interaction.options.getString("command", true), enabled = interaction.options.getBoolean("enabled", true), permissions = setUserCommandPermission(user.id, command, enabled, defaultRoleIds); audit(interaction, enabled ? "Granted user permission" : "Removed user permission", user.id, `${user.username} • ${permissionNames[command]}`); return interaction.reply({ content: `${enabled ? "✅ Granted" : "🗑️ Removed"} **${permissionNames[command]}** ${enabled ? "for" : "from"} ${user}.\nCurrent: ${permissions.map((item) => permissionNames[item]).join(" • ") || "No access"}`, embeds: [permissionsCard(interaction.guild)], ephemeral: true }); }
     if (sub === "roles-list") return interaction.reply({ embeds: [rolesCard(interaction.guild)], ephemeral: true });
     const role = interaction.options.getRole("role", true);
     const roles = sub === "roles-add" ? addAllowedRole(role.id, defaultRoleIds) : removeAllowedRole(role.id, defaultRoleIds);
@@ -147,11 +164,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return interaction.reply({ content: sub === "roles-add" ? `✅ ${role} can now use TWF Mod.` : `✅ ${role} can no longer use TWF Mod.`, embeds: [rolesCard(interaction.guild)], ephemeral: true });
   }
   if (sub === "audit") {
-    if (!authorized(interaction) && !botOwner(interaction)) return interaction.reply({ content: "You do not have permission to view the TWF Mod audit log.", ephemeral: true });
+    if (!authorized(interaction, "audit")) return interaction.reply({ content: "You do not have permission to view the TWF Mod audit log.", ephemeral: true });
     audit(interaction, "viewed audit log");
     return interaction.reply({ embeds: [auditCard()], ephemeral: true });
   }
-  if (!authorized(interaction)) return interaction.reply({ content: "You do not have permission to use TWF Mod.", ephemeral: true });
+  if (!authorized(interaction, permissionForSubcommand(sub))) return interaction.reply({ content: "You do not have permission for this TWF Mod command.", ephemeral: true });
+  if (sub === "character-list") return interaction.reply({ embeds: [charactersCard()], ephemeral: true });
   if (["code-create", "code-disable"].includes(sub)) {
     const code = interaction.options.getString("code", true), issuedBy = staff(interaction);
     const pending = sub === "code-create" ? beginCodeAction("code_create", code, interaction.options.getInteger("amount", true), interaction.options.getInteger("max_uses", true), interaction.options.getInteger("expires_minutes", true), issuedBy) : beginCodeAction("code_disable", code, 0, 0, 0, issuedBy);

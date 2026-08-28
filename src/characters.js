@@ -3,7 +3,7 @@ export const TWF_CHARACTERS = [
   "Sabrina Morningstar", "Landon Kirby", "Kyle", "Marc", "Dahlia", "Freya Mikaelson",
   "Raven", "White Raven", "Hope Mikaelson", "Lizzie Saltzman", "Josie Saltzman",
   "Dark Josie", "Bonnie Bennett", "Davina Claire", "Qetsiyah", "Esther Mikaelson",
-  "Sheila Bennett", "Emily Bennett", "Carrie White", "Prue Halliwell", "Paige Matthews",
+  "Sheila Bennett", "Scarlet Sheila", "Emily Bennett", "Carrie White", "Prue Halliwell", "Paige Matthews",
   "Piper", "Phoebe Halliwell", "Jean Grey", "Jean", "Macy Vaughn", "Maggie Vera",
   "Mel Vera", "Alex Russo", "Cleo Sowande", "Billie Jenkins", "Wyatt Halliwell",
   "Katerina Petrova", "Caroline Forbes", "Rebekah Mikaelson", "Damon Salvatore",
