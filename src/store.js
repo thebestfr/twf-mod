@@ -44,7 +44,7 @@ export function getHistory(userId) { const all = read("history.json", {}); retur
 export function getAllowedRoles(defaultRoleIds = []) { const config = read("role-permissions.json", null); if (config && Array.isArray(config.roles)) return config.roles.map(String); const roles = [...new Set(defaultRoleIds.map(String).filter(Boolean))]; write("role-permissions.json", { roles }); return roles; }
 export function addAllowedRole(roleId, defaultRoleIds = []) { const roles = new Set(getAllowedRoles(defaultRoleIds)); roles.add(String(roleId)); write("role-permissions.json", { roles: [...roles] }); return [...roles]; }
 export function removeAllowedRole(roleId, defaultRoleIds = []) { const roles = new Set(getAllowedRoles(defaultRoleIds)); roles.delete(String(roleId)); write("role-permissions.json", { roles: [...roles] }); const permissions = read("command-permissions.json", { roles: {}, users: {} }); if (permissions.roles) delete permissions.roles[String(roleId)]; write("command-permissions.json", permissions); return [...roles]; }
-export const PERMISSION_KEYS = ["mod", "characters", "coins", "codes", "audit", "server", "all"];
+export const PERMISSION_KEYS = ["mod", "characters", "coins", "codes", "audit", "all"];
 function commandPermissions(defaultRoleIds = []) {
   const saved = read("command-permissions.json", { roles: {}, users: {} });
   const roles = saved.roles && typeof saved.roles === "object" ? saved.roles : {};
