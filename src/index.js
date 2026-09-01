@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import express from "express";
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, Client, EmbedBuilder, Events, GatewayIntentBits, ModalBuilder, TextInputBuilder, TextInputStyle } from "discord.js";
 import { TWF_CHARACTERS } from "./characters.js";
-import { acknowledgeCommand, activeCommands, addAllowedRole, addAudit, addHistory, canUseCommand, claimCommand, enqueue, getAllowedRoles, getAudit, getCommandPermissions, getHistory, moderationStatus, removeAllowedRole, setModeration, setRoleCommandPermission, setUserCommandPermission } from "./store.js";
+import { acknowledgeCommand, activeCommands, addAllowedRole, addAudit, addHistory, canUseCommand, claimCommand, enqueue, getAllowedRoles, getAudit, getCommandPermissions, getHistory, moderationStatus, removeAllowedRole, setModeration, setRoleCommandPermission, setUserCommandPermission, storageStatus } from "./store.js";
 
 for (const name of ["DISCORD_TOKEN", "BRIDGE_SECRET"]) if (!process.env[name]) throw new Error(`Missing ${name} in .env.`);
 const defaultRoleIds = (process.env.ALLOWED_ROLE_IDS || "").split(",").map((id) => id.trim()).filter(Boolean);
@@ -22,6 +22,21 @@ function parseDuration(text) { const match = String(text).trim().match(/^(\d{1,3
 const permissionNames = { mod: "🛡️ Mod panel + bans", characters: "🎭 Characters", coins: "🪙 Coins", codes: "🎟️ Coin codes", audit: "📜 Audit log", all: "👑 Everything" };
 const permissionForSubcommand = (sub) => ({ mod: "mod", gift: "characters", revoke: "characters", "coins-add": "coins", "coins-remove": "coins", "coins-set": "coins", "code-create": "codes", "code-disable": "codes", audit: "audit", "character-list": "characters" })[sub] || "mod";
 async function fetchJson(url) { try { const response = await fetch(url); return response.ok ? response.json() : null; } catch { return null; } }
+async function resolveRobloxUserId(value) {
+  const target = String(value || "").trim();
+  if (validUserId(target)) return target;
+  if (!/^[A-Za-z0-9_]{3,20}$/.test(target)) return null;
+  try {
+    const response = await fetch("https://users.roblox.com/v1/usernames/users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ usernames: [target], excludeBannedUsers: false }),
+    });
+    const payload = response.ok ? await response.json() : null;
+    const user = payload?.data?.[0];
+    return user?.id ? String(user.id) : null;
+  } catch { return null; }
+}
 async function robloxProfile(userId) {
   const profile = await fetchJson(`https://users.roblox.com/v1/users/${userId}`);
   if (!profile) return null;
@@ -90,7 +105,7 @@ function permissionsCard(guild) {
   return new EmbedBuilder().setColor(0x8e44ad).setTitle("⚙️ TWF Mod Permission Centre").setDescription("Owners can give a specific role or user only the actions they need. `👑 Everything` grants full access.").addFields({ name: "Role permissions", value: trim(format(config.roles, "role"), 1024), inline: false }, { name: "User overrides", value: trim(format(config.users, "user"), 1024), inline: false }).setFooter({ text: "Use /twf permissions-role or /twf permissions-user to edit access." }).setTimestamp();
 }
 function helpCard() { return new EmbedBuilder().setColor(0x5865f2).setTitle("✨ TWF Mod • Staff Guide").setDescription("A live Discord control centre for The Witches Fate. Every game-changing action is confirmed and recorded.").addFields({ name: "🛡️ Player moderation", value: "`/twf mod` • profile, ban, temp-ban, unban, history", inline: false }, { name: "🎭 Character access", value: "`/twf gift` • `/twf revoke` • `/twf character-list`", inline: false }, { name: "🪙 Economy", value: "`/twf coins-add` • `/twf coins-remove` • `/twf coins-set` • coin-code commands", inline: false }, { name: "⚙️ Staff setup", value: "`/twf permissions-list` • `/twf permissions-role` • `/twf permissions-user` • `/twf audit`", inline: false }).setFooter({ text: "TWF Mod • actions apply in game within seconds" }).setTimestamp(); }
-function statusCard(interaction) { const available = Object.keys(permissionNames).filter((key) => key !== "all" && authorized(interaction, key)).map((key) => permissionNames[key]); return new EmbedBuilder().setColor(0x57f287).setTitle("🟢 TWF Mod System Status").setDescription("Discord bot is online and connected to the TWF command bridge.").addFields({ name: "Your access", value: botOwner(interaction) ? "👑 Server owner / bot owner — full access" : available.length ? available.join("\n") : "No TWF Mod permissions", inline: false }, { name: "Safety", value: "✅ Confirmations • ✅ Audit logging • ✅ One-time live game actions", inline: false }).setTimestamp(); }
+function statusCard(interaction) { const available = Object.keys(permissionNames).filter((key) => key !== "all" && authorized(interaction, key)).map((key) => permissionNames[key]); const storage = storageStatus(); return new EmbedBuilder().setColor(storage.persistentConfigured ? 0x57f287 : 0xfaa61a).setTitle("🟢 TWF Mod System Status").setDescription("Discord bot is online and connected to the TWF command bridge.").addFields({ name: "Your access", value: botOwner(interaction) ? "👑 Server owner / bot owner — full access" : available.length ? available.join("\n") : "No TWF Mod permissions", inline: false }, { name: "Safety", value: "✅ Confirmations • ✅ Audit logging • ✅ One-time live game actions", inline: false }, { name: "Permission storage", value: storage.persistentConfigured ? "✅ Persistent storage configured — role permissions survive restarts." : "⚠️ Temporary local storage — set `TWF_DATA_DIR` to a persistent disk before relying on role permissions.", inline: false }).setTimestamp(); }
 function charactersCard() { return new EmbedBuilder().setColor(0xff4da6).setTitle(`🎭 TWF Character Gift Directory • ${TWF_CHARACTERS.length}`).setDescription(TWF_CHARACTERS.map((name) => `• ${name}`).join("\n")).setFooter({ text: "Use /twf gift with a Roblox ID and character name. Scarlet Sheila is custom-only." }).setTimestamp(); }
 
 function confirmCard(record, title, description, fields, danger = false) {
@@ -175,8 +190,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
     const pending = sub === "code-create" ? beginCodeAction("code_create", code, interaction.options.getInteger("amount", true), interaction.options.getInteger("max_uses", true), interaction.options.getInteger("expires_minutes", true), issuedBy) : beginCodeAction("code_disable", code, 0, 0, 0, issuedBy);
     return interaction.reply({ ...(pending.error ? { content: pending.error } : pending), ephemeral: true });
   }
-  const userId = interaction.options.getString("roblox_user_id", true).trim();
-  if (!validUserId(userId)) return interaction.reply({ content: "Use a numeric Roblox user ID.", ephemeral: true });
+  const robloxTarget = interaction.options.getString("roblox_user", true).trim();
+  const userId = await resolveRobloxUserId(robloxTarget);
+  if (!userId) return interaction.reply({ content: "Enter a valid Roblox username or numeric user ID.", ephemeral: true });
   if (sub === "mod") { await interaction.deferReply(); let data = null; try { data = await robloxProfile(userId); } catch {} audit(interaction, "opened mod panel", userId); return interaction.editReply(modCard(userId, data)); }
   if (["coins-add", "coins-remove", "coins-set"].includes(sub)) {
     const action = `coins_${sub.slice(6)}`, amount = interaction.options.getInteger("amount", true), reason = interaction.options.getString("reason")?.trim() || "";

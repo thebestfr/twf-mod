@@ -2,10 +2,23 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 
-const dataDir = path.resolve("data");
+// Set TWF_DATA_DIR to a persistent disk mount on the bot host.  For example,
+// Render persistent disks can use /var/data/twf-mod.  The old relative data/
+// folder remains the local-development default.
+const dataDir = path.resolve(process.env.TWF_DATA_DIR || "data");
 const file = (name) => path.join(dataDir, name);
 function read(name, fallback) { fs.mkdirSync(dataDir, { recursive: true }); if (!fs.existsSync(file(name))) return fallback; try { return JSON.parse(fs.readFileSync(file(name), "utf8")); } catch { return fallback; } }
-function write(name, value) { fs.mkdirSync(dataDir, { recursive: true }); fs.writeFileSync(file(name), JSON.stringify(value, null, 2)); }
+function write(name, value) {
+  fs.mkdirSync(dataDir, { recursive: true });
+  const target = file(name), temporary = `${target}.${process.pid}.tmp`;
+  fs.writeFileSync(temporary, JSON.stringify(value, null, 2), "utf8");
+  fs.renameSync(temporary, target);
+}
+
+export function storageStatus() {
+  fs.mkdirSync(dataDir, { recursive: true });
+  return { directory: dataDir, persistentConfigured: Boolean(process.env.TWF_DATA_DIR) };
+}
 
 export function enqueue({ action, userId = "0", character = "", reason = "", durationSeconds = 0, amount = 0, code = "", maxUses = 0, expiresMinutes = 0, issuedBy }) {
   const commands = read("commands.json", []);

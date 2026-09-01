@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { REST, Routes, SlashCommandBuilder } from "discord.js";
 
-const robloxId = (option) => option.setName("roblox_user_id").setDescription("Roblox numeric user ID").setRequired(true);
+const robloxUser = (option) => option.setName("roblox_user").setDescription("Roblox username or numeric user ID").setRequired(true).setMinLength(1).setMaxLength(40);
 const amount = (option, description, minimum = 1) => option.setName("amount").setDescription(description).setMinValue(minimum).setMaxValue(100000000).setRequired(true);
 const reason = (option) => option.setName("reason").setDescription("Staff note (optional)").setMaxLength(200);
 const permission = (option) => option.setName("command").setDescription("TWF Mod area to grant or remove").setRequired(true).addChoices(
@@ -12,12 +12,12 @@ const permission = (option) => option.setName("command").setDescription("TWF Mod
 
 const commands = [
   new SlashCommandBuilder().setName("twf").setDescription("The Witches Fate staff controls.")
-    .addSubcommand((sub) => sub.setName("mod").setDescription("Open advanced TWF Mod controls for a Roblox user.").addStringOption(robloxId))
-    .addSubcommand((sub) => sub.setName("gift").setDescription("Give a permanent TWF character.").addStringOption(robloxId).addStringOption((option) => option.setName("character").setDescription("Choose or type the TWF character").setRequired(true).setAutocomplete(true)))
-    .addSubcommand((sub) => sub.setName("revoke").setDescription("Revoke a permanently gifted TWF character.").addStringOption(robloxId).addStringOption((option) => option.setName("character").setDescription("Choose or type the TWF character").setRequired(true).setAutocomplete(true)))
-    .addSubcommand((sub) => sub.setName("coins-add").setDescription("Add coins to a Roblox user, online or offline.").addStringOption(robloxId).addIntegerOption((option) => amount(option, "Coins to add")).addStringOption(reason))
-    .addSubcommand((sub) => sub.setName("coins-remove").setDescription("Remove coins from a Roblox user, never below zero.").addStringOption(robloxId).addIntegerOption((option) => amount(option, "Coins to remove")).addStringOption(reason))
-    .addSubcommand((sub) => sub.setName("coins-set").setDescription("Set a Roblox user's exact saved coin balance.").addStringOption(robloxId).addIntegerOption((option) => amount(option, "New coin balance", 0)).addStringOption(reason))
+    .addSubcommand((sub) => sub.setName("mod").setDescription("Open advanced TWF Mod controls for a Roblox user.").addStringOption(robloxUser))
+    .addSubcommand((sub) => sub.setName("gift").setDescription("Give a permanent TWF character.").addStringOption(robloxUser).addStringOption((option) => option.setName("character").setDescription("Choose or type the TWF character").setRequired(true).setAutocomplete(true)))
+    .addSubcommand((sub) => sub.setName("revoke").setDescription("Revoke a permanently gifted TWF character.").addStringOption(robloxUser).addStringOption((option) => option.setName("character").setDescription("Choose or type the TWF character").setRequired(true).setAutocomplete(true)))
+    .addSubcommand((sub) => sub.setName("coins-add").setDescription("Add coins to a Roblox user, online or offline.").addStringOption(robloxUser).addIntegerOption((option) => amount(option, "Coins to add")).addStringOption(reason))
+    .addSubcommand((sub) => sub.setName("coins-remove").setDescription("Remove coins from a Roblox user, never below zero.").addStringOption(robloxUser).addIntegerOption((option) => amount(option, "Coins to remove")).addStringOption(reason))
+    .addSubcommand((sub) => sub.setName("coins-set").setDescription("Set a Roblox user's exact saved coin balance.").addStringOption(robloxUser).addIntegerOption((option) => amount(option, "New coin balance", 0)).addStringOption(reason))
     .addSubcommand((sub) => sub.setName("code-create").setDescription("Create a redeemable TWF coin code.").addStringOption((option) => option.setName("code").setDescription("3-24 letters, numbers, _ or -").setRequired(true).setMinLength(3).setMaxLength(24)).addIntegerOption((option) => amount(option, "Coins per redemption")).addIntegerOption((option) => option.setName("max_uses").setDescription("0 = unlimited uses").setMinValue(0).setMaxValue(1000000).setRequired(true)).addIntegerOption((option) => option.setName("expires_minutes").setDescription("0 = never expires").setMinValue(0).setMaxValue(525600).setRequired(true)))
     .addSubcommand((sub) => sub.setName("code-disable").setDescription("Disable a coin code immediately.").addStringOption((option) => option.setName("code").setDescription("Coin code to disable").setRequired(true).setMinLength(3).setMaxLength(24)))
     .addSubcommand((sub) => sub.setName("roles-list").setDescription("Show the Discord roles allowed to use TWF Mod."))

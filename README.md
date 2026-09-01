@@ -11,19 +11,20 @@ This bot gives or revokes Roblox game characters from Discord and uses the same 
 5. Run `npm start`.
 6. Host the bot at a public HTTPS address. Configure that address and the same secret in Roblox `ServerStorage.ServerModules.DiscordBridgeSettings`.
 7. In Roblox Studio Game Settings > Security, enable **Allow HTTP Requests**.
+8. Add a persistent disk to the bot host and set `TWF_DATA_DIR` to its mount path (for example `/var/data/twf-mod` on Render). This keeps role and user permissions, audits, moderation records, and queued actions after restarts or deployments.
 
 ## Commands
 
-- `/twf mod roblox_user_id:<id>` — opens the TWF Mod card with Gift, Revoke, Character History, moderation, refresh, and Roblox-profile controls.
-- `/twf gift roblox_user_id:<id> character:<character>` — type part of a name and choose a character suggestion, then press **Confirm Gift**.
-- `/twf revoke roblox_user_id:<id> character:<character>` — choose the character, then press **Confirm Revoke**.
+- `/twf mod roblox_user:<username-or-id>` — opens the TWF Mod card with Gift, Revoke, Character History, moderation, refresh, and Roblox-profile controls.
+- `/twf gift roblox_user:<username-or-id> character:<character>` — type part of a name and choose a character suggestion, then press **Confirm Gift**.
+- `/twf revoke roblox_user:<username-or-id> character:<character>` — choose the character, then press **Confirm Revoke**.
 - `/twf ping`
 
 ## Economy commands
 
-- `/twf coins-add roblox_user_id:<id> amount:<amount> reason:<optional>`
-- `/twf coins-remove roblox_user_id:<id> amount:<amount> reason:<optional>`
-- `/twf coins-set roblox_user_id:<id> amount:<amount> reason:<optional>`
+- `/twf coins-add roblox_user:<username-or-id> amount:<amount> reason:<optional>`
+- `/twf coins-remove roblox_user:<username-or-id> amount:<amount> reason:<optional>`
+- `/twf coins-set roblox_user:<username-or-id> amount:<amount> reason:<optional>`
 - `/twf code-create code:<code> amount:<coins> max_uses:<0 for unlimited> expires_minutes:<0 for never>`
 - `/twf code-disable code:<code>`
 
