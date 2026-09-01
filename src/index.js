@@ -135,7 +135,7 @@ app.post("/api/roblox/character-commands/:id/ack", (request, response) => {
 });
 client.once(Events.ClientReady, (ready) => console.log(`TWF Mod ready as ${ready.user.tag}`));
 client.on(Events.InteractionCreate, async (interaction) => {
-  if (interaction.isAutocomplete()) { if (interaction.commandName !== "fate" || !authorized(interaction, "characters")) return interaction.respond([]); const focused = interaction.options.getFocused().toLowerCase(); return interaction.respond(TWF_CHARACTERS.filter((character) => character.toLowerCase().includes(focused)).slice(0, 25).map((character) => ({ name: character, value: character }))); }
+  if (interaction.isAutocomplete()) { if (interaction.commandName !== "twf" || !authorized(interaction, "characters")) return interaction.respond([]); const focused = interaction.options.getFocused().toLowerCase(); return interaction.respond(TWF_CHARACTERS.filter((character) => character.toLowerCase().includes(focused)).slice(0, 25).map((character) => ({ name: character, value: character }))); }
   if (interaction.isButton()) {
     const [, action, value] = interaction.customId.split(":");
     if (["confirm", "cancel"].includes(action)) { const record = pendingActions.get(value), permission = record?.type === "character" ? "characters" : record?.type === "coins" ? "coins" : record?.type === "code" ? "codes" : "mod"; if (!authorized(interaction, permission)) return interaction.reply({ content: "You do not have permission for this TWF Mod action.", ephemeral: true }); if (!record || record.expiresAt <= Date.now()) return interaction.update({ content: "This staff action expired. Please start it again.", embeds: [], components: [] }); if (record.issuedBy !== staff(interaction)) return interaction.reply({ content: "Only the staff member who started this action can confirm it.", ephemeral: true }); pendingActions.delete(value); if (action === "cancel") { audit(interaction, "Cancelled pending action", record.userId || record.code, record.action); return interaction.update({ content: "Staff action cancelled.", embeds: [], components: [] }); } audit(interaction, record.action, record.userId || record.code, record.character || record.code || (record.amount ? `${record.amount} coins` : "")); return interaction.update(completedAction(record)); }
@@ -163,9 +163,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (action === "tempban" && !seconds) return interaction.reply({ content: "Use a length like `30m`, `1h`, `7d`, or `1w`.", ephemeral: true });
     const result = moderate(action, userId, reason, seconds, staff(interaction)); if (!result.error) audit(interaction, action, userId, reason); return interaction.reply({ content: result.error || `${action === "ban" ? "Banned" : "Temp banned"} Roblox user **${userId}**${seconds ? ` for **${durationText(seconds)}**` : ""}.`, ephemeral: true });
   }
-  if (!interaction.isChatInputCommand() || interaction.commandName !== "fate") return;
-  const rawSub = interaction.options.getSubcommand();
-  const sub = ({ user: "mod", give: "gift", take: "revoke", add: "coins-add", remove: "coins-remove", set: "coins-set", "voucher-create": "code-create", "voucher-close": "code-disable", roles: "roles-list", "role-allow": "roles-add", "role-remove": "roles-remove", perms: "permissions-list", "access-role": "permissions-role", "access-member": "permissions-user", chars: "character-list", log: "audit", info: "status", guide: "help", pulse: "ping" })[rawSub] || rawSub;
+  if (!interaction.isChatInputCommand() || interaction.commandName !== "twf") return;
+  const sub = interaction.options.getSubcommand();
   if (sub === "ping") return interaction.reply({ content: "TWF Mod is online.", ephemeral: true });
   if (sub === "help") return interaction.reply({ embeds: [helpCard()], ephemeral: true });
   if (sub === "status") return interaction.reply({ embeds: [statusCard(interaction)], ephemeral: true });
