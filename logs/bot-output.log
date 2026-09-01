@@ -1,0 +1,6 @@
+
+> twf-discord-character-bot@1.0.0 start
+> node src/index.js
+
+TWF bridge HTTP API listening on port 3000
+TWF Mod ready as TWF Assistant#4656

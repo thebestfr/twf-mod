@@ -1,0 +1,161 @@
+node:events:487
+      throw er; // Unhandled 'error' event
+      ^
+
+DiscordAPIError[10062]: Unknown interaction
+    at handleErrors (C:\Users\omari\Documents\Codex\2026-08-25\ok-so-when-you-become-a\discord-character-bot\node_modules\@discordjs\rest\dist\index.js:791:13)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async BurstHandler.runRequest (C:\Users\omari\Documents\Codex\2026-08-25\ok-so-when-you-become-a\discord-character-bot\node_modules\@discordjs\rest\dist\index.js:898:23)
+    at async _REST.request (C:\Users\omari\Documents\Codex\2026-08-25\ok-so-when-you-become-a\discord-character-bot\node_modules\@discordjs\rest\dist\index.js:1342:22)
+    at async AutocompleteInteraction.respond (C:\Users\omari\Documents\Codex\2026-08-25\ok-so-when-you-become-a\discord-character-bot\node_modules\discord.js\src\structures\AutocompleteInteraction.js:86:5)
+Emitted 'error' event on Client instance at:
+    at emitUnhandledRejectionOrErr (node:events:392:10)
+    at process.processTicksAndRejections (node:internal/process/task_queues:92:21) {
+  rawError: { message: 'Unknown interaction', code: 10062 },
+  code: 10062,
+  status: 404,
+  method: 'POST',
+  url: 'https://discord.com/api/v10/interactions/1542782866058911754/aW50ZXJhY3Rpb246MTU0Mjc4Mjg2NjA1ODkxMTc1NDpNbFJ5SmNuakRyRUFMQjJDaktmME5xZlBOamo2U1Axd1ZLMzF1VEVPODJSZFhONkFzSjByN2o5ZElsV0k1cFlla3RSd3RTb0tLejlycmc0U3d5eWFhdFJhcUhQcnJCWnhFVFl0ZFBZdmZYbFhNR2wzcnhONjd5eU1TU1ZTSXgwZQ/callback',
+  requestBody: {
+    files: undefined,
+    json: {
+      type: 8,
+      data: {
+        choices: [
+          {
+            name: 'Alex Russo',
+            value: 'Alex Russo',
+            name_localizations: undefined
+          },
+          {
+            name: 'Aurora De Martel',
+            value: 'Aurora De Martel',
+            name_localizations: undefined
+          },
+          {
+            name: 'Billie Jenkins',
+            value: 'Billie Jenkins',
+            name_localizations: undefined
+          },
+          {
+            name: 'Bonnie Bennett',
+            value: 'Bonnie Bennett',
+            name_localizations: undefined
+          },
+          {
+            name: 'Cade',
+            value: 'Cade',
+            name_localizations: undefined
+          },
+          {
+            name: 'Caroline Forbes',
+            value: 'Caroline Forbes',
+            name_localizations: undefined
+          },
+          {
+            name: 'Carrie White',
+            value: 'Carrie White',
+            name_localizations: undefined
+          },
+          {
+            name: 'Cleo Sowande',
+            value: 'Cleo Sowande',
+            name_localizations: undefined
+          },
+          {
+            name: 'Dahlia',
+            value: 'Dahlia',
+            name_localizations: undefined
+          },
+          {
+            name: 'Damon Salvatore',
+            value: 'Damon Salvatore',
+            name_localizations: undefined
+          },
+          {
+            name: 'Dark Josie',
+            value: 'Dark Josie',
+            name_localizations: undefined
+          },
+          {
+            name: 'Davina Claire',
+            value: 'Davina Claire',
+            name_localizations: undefined
+          },
+          {
+            name: 'Elena Gilbert',
+            value: 'Elena Gilbert',
+            name_localizations: undefined
+          },
+          {
+            name: 'Emily Bennett',
+            value: 'Emily Bennett',
+            name_localizations: undefined
+          },
+          {
+            name: 'Esther Mikaelson',
+            value: 'Esther Mikaelson',
+            name_localizations: undefined
+          },
+          {
+            name: 'Freya Mikaelson',
+            value: 'Freya Mikaelson',
+            name_localizations: undefined
+          },
+          {
+            name: 'Hope Mikaelson',
+            value: 'Hope Mikaelson',
+            name_localizations: undefined
+          },
+          {
+            name: 'Inadu Labonair',
+            value: 'Inadu Labonair',
+            name_localizations: undefined
+          },
+          {
+            name: 'Jean',
+            value: 'Jean',
+            name_localizations: undefined
+          },
+          {
+            name: 'Jean Grey',
+            value: 'Jean Grey',
+            name_localizations: undefined
+          },
+          {
+            name: 'Josie Saltzman',
+            value: 'Josie Saltzman',
+            name_localizations: undefined
+          },
+          {
+            name: 'Katerina Petrova',
+            value: 'Katerina Petrova',
+            name_localizations: undefined
+          },
+          {
+            name: 'Kyle',
+            value: 'Kyle',
+            name_localizations: undefined
+          },
+          {
+            name: 'Landon Kirby',
+            value: 'Landon Kirby',
+            name_localizations: undefined
+          },
+          {
+            name: 'Lilith',
+            value: 'Lilith',
+            name_localizations: undefined
+          }
+        ]
+      }
+    }
+  }
+}
+
+Node.js v26.3.1
+npm notice
+npm notice New major version of npm available! 11.16.0 -> 12.0.2
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.0.2
+npm notice To update run: npm install -g npm@12.0.2
+npm notice
